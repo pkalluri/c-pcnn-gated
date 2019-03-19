@@ -3,6 +3,7 @@ import os
 import scipy.misc
 from datetime import datetime
 import tensorflow as tf
+import random
 
 def binarize(images):
     return (np.random.uniform(size=images.shape) < images).astype(np.float32)
@@ -79,11 +80,18 @@ def one_hot(batch_y, num_classes):
 
 def makepaths(conf):
     ckpt_full_path = os.path.join(conf.ckpt_path, "data=%s_bs=%d_layers=%d_fmap=%d"%(conf.data, conf.batch_size, conf.layers, conf.f_map))
+    ckpt_full_path += '_conditional' if conf.conditional else ''
     if not os.path.exists(ckpt_full_path):
         os.makedirs(ckpt_full_path)
     conf.ckpt_file = os.path.join(ckpt_full_path, "model.ckpt")
 
-    conf.samples_path = os.path.join(conf.samples_path, "epoch=%d_bs=%d_layers=%d_fmap=%d"%(conf.epochs, conf.batch_size, conf.layers, conf.f_map))
+    prefix = '%d_'%conf.id if conf.id > 0 else ''
+    conf.samples_path = os.path.join(conf.samples_path, prefix+"epoch=%d_bs=%d_layers=%d_fmap=%d"%(conf.epochs, conf.batch_size, conf.layers, conf.f_map))
+    conf.samples_path += '_%s'%conf.data
+    conf.samples_path += '_conditional' if conf.conditional else ''
+    conf.samples_path += '_%s_loss'%conf.loss
+    conf.samples_path += '_%s'%conf.note
+
     if not os.path.exists(conf.samples_path):
         os.makedirs(conf.samples_path)
 
@@ -92,3 +100,13 @@ def makepaths(conf):
     tf.gfile.MakeDirs(conf.summary_path)
 
     return conf
+
+def make_deterministic(seed=1234):
+    tf.set_random_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    # torch.cuda.manual_seed_all(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    # torch.backends.cudnn.deterministic = True
+    # torch.backends.cudnn.benchmark = False
+    config = tf.ConfigProto(inter_op_parallelism_threads=1, intra_op_parallelism_threads=1)
