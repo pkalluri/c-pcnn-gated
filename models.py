@@ -1,6 +1,7 @@
 import tensorflow as tf
 from layers import *
-import losses
+import unconditional_losses
+import conditional_losses
 
 class PixelCNN(object):
     def __init__(self, X, conf, full_horizontal=True, h=None):
@@ -50,21 +51,27 @@ class PixelCNN(object):
             with tf.variable_scope("fc_2"):
                 self.fc2 = GatedCNN([1, 1, 1], fc1, True, gated=False, mask='b', activation=False).output()
 
-            if conf.loss == 'original':
-                self.loss = losses.original_loss(logits=self.fc2, labels=self.X)
-            elif conf.loss == 'nll':
-                self.loss = losses.nll_loss(logits=self.fc2, labels=self.X)
-            elif conf.loss == 'unaveraged_nll':
-                self.loss = losses.unaveraged_nll_loss(logits=self.fc2, labels=self.X)
-            elif conf.loss == 'sum':
-                self.loss = losses.sum_loss(logits=self.fc2, labels=self.X)
-            elif conf.loss == 'unaveraged_sum':
-                self.loss = losses.unaveraged_sum_loss(logits=self.fc2, labels=self.X)
-            elif conf.loss == 'min':
-                self.loss = losses.min_loss(logits=self.fc2, labels=self.X)
-            elif conf.loss == 'test':
-                self.loss = losses.test_loss(logits=self.fc2, labels=self.X)
+            if conf.model == 'conditional':
+                losses = conditional_losses
+            else:
+                losses = unconditional_losses
 
+            if conf.loss == 'original':
+                self.loss = losses.original_loss(logits=self.fc2, labels=self.X, Y=self.h)
+            elif conf.loss == 'nll':
+                self.loss = losses.nll_loss(logits=self.fc2, labels=self.X, Y=self.h)
+            elif conf.loss == 'unaveraged_nll':
+                self.loss = losses.unaveraged_nll_loss(logits=self.fc2, labels=self.X, Y=self.h)
+            elif conf.loss == 'sum':
+                self.loss = losses.sum_loss(logits=self.fc2, labels=self.X, Y=self.h)
+            elif conf.loss == 'unaveraged_sum':
+                self.loss = losses.unaveraged_sum_loss(logits=self.fc2, labels=self.X, Y=self.h)
+            elif conf.loss == 'min':
+                self.loss = losses.min_loss(logits=self.fc2, labels=self.X, Y=self.h)
+            elif conf.loss == 'soft_min':
+                self.loss = losses.soft_min_loss(logits=self.fc2, labels=self.X, Y=self.h)
+            elif conf.loss == 'test':
+                self.loss = losses.test_loss(logits=self.fc2, labels=self.X, Y=self.h)
             self.pred = tf.nn.sigmoid(self.fc2)
         else:
             color_dim = 256
