@@ -10,7 +10,7 @@ def binarize(images):
     # Converts each pixel value to 0 or 1
     return (np.random.uniform(size=images.shape) < images).astype(np.float32)
 
-def generate_samples(sess, X, h, pred, conf, suff):
+def generate_samples(sess, X, h, pred, filename, conf):
     print("Generating Sample Images...")
     n_row, n_col = 10,10
     samples = np.zeros((n_row*n_col, conf.img_height, conf.img_width, conf.channels))
@@ -26,10 +26,10 @@ def generate_samples(sess, X, h, pred, conf, suff):
                 # print(next_sample.dtype, next_sample.shape, np.min(next_sample), np.max(next_sample))
                 samples[:, i, j, k] = next_sample[:, i, j, k]
                 # if conf.debug: save_images(samples, n_row, n_col, conf)
-    save_images(samples, n_row, n_col, conf)
+    save_images(samples, n_row, n_col, filename, conf)
 
 
-def generate_ae(sess, encoder_X, decoder_X, y, data, conf, suff=''):
+def generate_ae(sess, encoder_X, decoder_X, y, data, conf, epoch):
     print("Generating Sample Images...")
     n_row, n_col = 10,10
     samples = np.zeros((n_row*n_col, conf.img_height, conf.img_width, conf.channels), dtype=np.float32)
@@ -46,10 +46,10 @@ def generate_ae(sess, encoder_X, decoder_X, y, data, conf, suff=''):
                     next_sample = binarize(next_sample)
                 samples[:, i, j, k] = next_sample[:, i, j, k]
 
-    save_images(samples, n_row, n_col, conf)
+    save_images(samples, n_row, n_col, epoch+".png", conf)
 
 
-def save_images(images, n_row, n_col, conf):
+def save_images(images, n_row, n_col, filename, conf):
     '''
     Saves images as a single .png
     :param images: numpy array with shape N,H,W or N,H,W,C
@@ -62,7 +62,8 @@ def save_images(images, n_row, n_col, conf):
 
     images = (images/(conf.bins-1) * 255).astype('uint8') # change number of bins back to 256
 
-    filepath = os.path.join(conf.samples_path, datetime.now().strftime('%Y_%m_%d-%H_%M_%S')+".png")
+    filepath = os.path.join(conf.samples_path, filename)
+    # filepath = os.path.join(conf.samples_path, datetime.now().strftime('%Y_%m_%d-%H_%M_%S')+".png")
     if conf.debug: Image.fromarray(images).show()
     Image.fromarray(images).save(filepath)
     print("Saved "+ filepath)
@@ -77,7 +78,7 @@ def save_batch_details(batch_X, conf):
     flat = batch_X.flatten()
     flat.sort()
     print("Batch details: ", batch_X.dtype, batch_X.shape, np.min(batch_X), np.max(batch_X), flat)
-    save_images(batch_X, conf.batch_size, 1, conf)
+    save_images(batch_X, conf.batch_size, 1, "batch_debug.png", conf)
 
 
 # def save_images(samples, n_row, n_col, conf, suff):
@@ -125,7 +126,7 @@ def makepaths(conf):
     conf.samples_path = os.path.join(conf.samples_path, prefix)
     conf.samples_path += '_%s'%conf.data
     conf.samples_path += '_conditional' if conf.conditional else ''
-    conf.samples_path += "bins=%d_bs=%d_fmap=%d_layers=%d_epoch=%d_loss=%s_%s" % \
+    conf.samples_path += "_bins=%d_bs=%d_fmap=%d_layers=%d_epoch=%d_loss=%s_%s" % \
                          (conf.bins, conf.batch_size, conf.f_map, conf.layers, conf.epochs, conf.loss, conf.note)
     conf.samples_path += '_debug' if conf.debug else ''
     if not os.path.exists(conf.samples_path):

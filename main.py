@@ -47,7 +47,7 @@ def train(conf, data):
                     batch_X = batch_X.reshape([conf.batch_size,conf.img_height, conf.img_width, conf.channels]) # N,H,W,C
                     batch_y = one_hot(batch_y, conf.num_classes)  # N,10
                 if i==0 and j==0:
-                    save_images(batch_X, conf.batch_size, 1, conf)
+                    save_images(batch_X, conf.batch_size, 1, "batch.png", conf)
                 data_dict = {X:batch_X}
                 if conf.conditional is True:
                     data_dict[model.h] = batch_y
@@ -57,9 +57,9 @@ def train(conf, data):
             print("Epoch: %d, Cost: %f"%(i, epoch_loss))
             if (i+1)%1 == 0:
                 saver.save(sess, conf.ckpt_file)
-                generate_samples(sess, X, model.h, model.pred, conf, "")
+                generate_samples(sess, X, model.h, model.pred, i+".png", conf)
 
-        generate_samples(sess, X, model.h, model.pred, conf, "")
+        generate_samples(sess, X, model.h, model.pred, "final.png", conf)
 
 # BEGIN
 parser = argparse.ArgumentParser()
