@@ -1,12 +1,14 @@
 import tensorflow as tf
 from layers import *
-import unconditional_losses
-import conditional_losses
+import unconditional_binary_losses
+import conditional_binary_losses
+import unconditional_multiclass_losses
+import conditional_multiclass_losses
 
 class PixelCNN(object):
     def __init__(self, X, conf, full_horizontal=True, h=None):
         self.X = X
-        if conf.data == "mnist":
+        if conf.data == "original":
             self.X_norm = X
         else:
             '''
@@ -47,15 +49,12 @@ class PixelCNN(object):
         with tf.variable_scope("fc_1"):
             fc1 = GatedCNN([1, 1, conf.f_map], h_stack_in, True, gated=False, mask='b').output()
 
-        if conf.data == "mnist":
+        if conf.data == "mnist_bw":
             with tf.variable_scope("fc_2"):
-                self.fc2 = GatedCNN([1, 1, 1], fc1, True, gated=False, mask='b', activation=False).output()
+                self.fc2 = GatedCNN([1, 1, 1], fc1, True, gated=False, mask='b', activation=False).output() # N,H,W,1
+            # print(self.fc2)
 
-            if conf.model == 'conditional':
-                losses = conditional_losses
-            else:
-                losses = unconditional_losses
-
+            losses = conditional_binary_losses if conf.model == 'conditional' else unconditional_binary_losses
             if conf.loss == 'original':
                 self.loss = losses.original_loss(logits=self.fc2, labels=self.X, Y=self.h)
             elif conf.loss == 'nll':
@@ -68,27 +67,43 @@ class PixelCNN(object):
                 self.loss = losses.unaveraged_sum_loss(logits=self.fc2, labels=self.X, Y=self.h)
             elif conf.loss == 'min':
                 self.loss = losses.min_loss(logits=self.fc2, labels=self.X, Y=self.h)
-            elif conf.loss == 'soft_min':
-                self.loss = losses.soft_min_loss(logits=self.fc2, labels=self.X, Y=self.h)
-            elif conf.loss == 'test':
-                self.loss = losses.test_loss(logits=self.fc2, labels=self.X, Y=self.h)
-            self.pred = tf.nn.sigmoid(self.fc2)
+
+            self.out = tf.nn.sigmoid(self.fc2) # N,H,W,1
+            # print(self.out)
+            self.pred = tf.random_uniform(tf.shape(self.out))<self.out # sample; N,H,W,1
+            # print(self.pred)
+
         else:
-            color_dim = 256
             with tf.variable_scope("fc_2"):
-                self.fc2 = GatedCNN([1, 1, conf.channel * color_dim], fc1, True, gated=False, mask='b', activation=False).output()
-                self.fc2 = tf.reshape(self.fc2, (-1, color_dim))
+                self.fc2 = GatedCNN([1, 1, conf.channels * conf.bins], fc1, True, gated=False, mask='b', activation=False).output() # N,H,W,B
+            # print(self.fc2)
+            self.flat = tf.reshape(self.fc2, (-1, conf.bins)) # NHW,B
+            # print(self.flat)
+            self.labels = tf.cast(tf.reshape(self.X, [-1]), dtype=tf.int32) # NHW
+            # print(self.labels)
 
-            self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(self.fc2, tf.cast(tf.reshape(self.X, [-1]), dtype=tf.int32)))
+            losses = conditional_multiclass_losses if conf.model == 'conditional' else unconditional_multiclass_losses
+            if conf.loss == 'original':
+                self.loss = losses.original_loss(logits=self.flat, labels=self.labels, Y=self.h)
+                # self.losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.flat, labels=self.labels)
+                # self.loss = tf.reduce_mean(self.losses)
+            elif conf.loss == 'nll':
+                self.loss = losses.nll_loss(logits=self.flat, labels=self.labels, Y=self.h)
+            elif conf.loss == 'unaveraged_nll':
+                self.loss = losses.unaveraged_nll_loss(logits=self.flat, labels=self.labels, Y=self.h)
+            elif conf.loss == 'sum':
+                self.loss = losses.sum_loss(logits=self.flat, labels=self.labels, Y=self.h)
+            elif conf.loss == 'unaveraged_sum':
+                self.loss = losses.unaveraged_sum_loss(logits=self.flat, labels=self.labels, Y=self.h)
+            elif conf.loss == 'min':
+                self.loss = losses.min_loss(logits=self.flat, labels=self.labels, Y=self.h)
 
-            '''
-                Since this code was not run on CIFAR-10, I'm not sure which 
-                would be a suitable way to generate 3-channel images. Below are
-                the 2 methods which may be used, with the first one (self.pred)
-                being more likely.
-            '''
-            self.pred_sampling = tf.reshape(tf.multinomial(tf.nn.softmax(self.fc2), num_samples=1, seed=100), tf.shape(self.X))
-            self.pred = tf.reshape(tf.argmax(tf.nn.softmax(self.fc2), dimension=tf.rank(self.fc2) - 1), tf.shape(self.X))
+            self.out = tf.nn.softmax(self.flat) # NHW,B
+            # print(self.out)
+            self.pred = tf.multinomial(tf.log(self.out), num_samples = 1, seed = 100) # sample; NHW,1
+            # print(self.pred)
+            self.pred = tf.reshape(self.pred, (-1, conf.img_height, conf.img_width, 1)) # sample; N,H,W,1
+            # print(self.pred)
 
 
 class ConvolutionalEncoder(object):
@@ -102,7 +117,7 @@ class ConvolutionalEncoder(object):
             as the decoder.
         '''
 
-        W_conv1 = get_weights([5, 5, conf.channel, 100], "W_conv1")
+        W_conv1 = get_weights([5, 5, conf.channels, 100], "W_conv1")
         b_conv1 = get_bias([100], "b_conv1")
         conv1 = tf.nn.relu(conv_op(X, W_conv1) + b_conv1)
         pool1 = max_pool_2x2(conv1)

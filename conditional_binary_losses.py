@@ -18,7 +18,6 @@ def unaveraged_nll_loss(logits=None, labels=None, Y=None):
     loss = tf.reduce_sum(loss, axis=0)  # sum of log --> all samples
     return -loss
 
-# Should currently be same as nll loss
 def sum_loss(logits=None, labels=None, Y=None):
     logits = tf.nn.sigmoid(logits)
     loss = labels * tf.log(logits) + (1 - labels) * tf.log(1 - logits)  # log pixel losses
@@ -46,6 +45,7 @@ def sum_loss(logits=None, labels=None, Y=None):
     total_loss = total_loss / tf.cast(tf.shape(logits)[0], tf.float32)
     return -total_loss
 
+# Future work...
 # # Should currently be same as nll loss
 # def sum_loss(logits=None, labels=None, Y=None):
 #     logits = tf.nn.sigmoid(logits)
@@ -67,7 +67,6 @@ def sum_loss(logits=None, labels=None, Y=None):
 #
 #     return -final_loss
 
-# TODO?
 # def sum_loss(logits=None, labels=None):
 #     denominator = tf.reduce_prod(tf.shape(logits)) # for averaging
 #     logits = tf.nn.sigmoid(logits)
@@ -113,6 +112,7 @@ def min_loss(logits=None, labels=None, Y=None):
     # total_loss = total_loss / tf.cast(tf.shape(logits)[0], tf.float32)
     return -total_loss
 
+# Future work...
 # def soft_min_loss(logits=None, labels=None, Y=None):
 #     logits = tf.nn.sigmoid(logits)
 #     loss = labels * tf.log(logits) + (1 - labels) * tf.log((1 - logits))  # log pixel losses
@@ -142,7 +142,6 @@ def min_loss(logits=None, labels=None, Y=None):
 #     total_loss = total_loss / tf.cast(tf.shape(logits)[0], tf.float32)
 #     return -total_loss
 
-# TODO need to reason through this more
 # def soft_min_loss(logits=None, labels=None, Y=None):
 #     logits = tf.nn.sigmoid(logits)
 #     loss = labels * tf.log(logits) + (1 - labels) * tf.log((1 - logits))  # log pixel losses

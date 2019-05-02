@@ -4,72 +4,108 @@ import scipy.misc
 from datetime import datetime
 import tensorflow as tf
 import random
+from PIL import Image
 
 def binarize(images):
+    # Converts each pixel value to 0 or 1
     return (np.random.uniform(size=images.shape) < images).astype(np.float32)
 
 def generate_samples(sess, X, h, pred, conf, suff):
     print("Generating Sample Images...")
     n_row, n_col = 10,10
-    samples = np.zeros((n_row*n_col, conf.img_height, conf.img_width, conf.channel), dtype=np.float32)
-    # TODO make it generic
-    labels = one_hot(np.array([0,1,2,3,4,5,6,7,8,9]*10), conf.num_classes)
+    samples = np.zeros((n_row*n_col, conf.img_height, conf.img_width, conf.channels))
+    labels = one_hot(np.array([0,1,2,3,4,5,6,7,8,9]*10), conf.num_classes)  # todo
 
     for i in range(conf.img_height):
         for j in range(conf.img_width):
-            for k in range(conf.channel):
+            for k in range(conf.channels):
                 data_dict = {X:samples}
                 if conf.conditional is True:
                     data_dict[h] = labels
                 next_sample = sess.run(pred, feed_dict=data_dict)
-                if conf.data == "mnist":
-                    next_sample = binarize(next_sample)
+                # print(next_sample.dtype, next_sample.shape, np.min(next_sample), np.max(next_sample))
                 samples[:, i, j, k] = next_sample[:, i, j, k]
-
-    save_images(samples, n_row, n_col, conf, suff)
+                # if conf.debug: save_images(samples, n_row, n_col, conf)
+    save_images(samples, n_row, n_col, conf)
 
 
 def generate_ae(sess, encoder_X, decoder_X, y, data, conf, suff=''):
     print("Generating Sample Images...")
     n_row, n_col = 10,10
-    samples = np.zeros((n_row*n_col, conf.img_height, conf.img_width, conf.channel), dtype=np.float32)
+    samples = np.zeros((n_row*n_col, conf.img_height, conf.img_width, conf.channels), dtype=np.float32)
     if conf.data == 'mnist':
-        labels = binarize(data.train.next_batch(n_row*n_col)[0].reshape(n_row*n_col, conf.img_height, conf.img_width, conf.channel))
+        labels = binarize(data.train.next_batch(n_row*n_col)[0].reshape(n_row*n_col, conf.img_height, conf.img_width, conf.channels))
     else:
         labels = get_batch(data, 0, n_row*n_col) 
 
     for i in range(conf.img_height):
         for j in range(conf.img_width):
-            for k in range(conf.channel):
+            for k in range(conf.channels):
                 next_sample = sess.run(y, {encoder_X: labels, decoder_X: samples})
                 if conf.data == 'mnist':
                     next_sample = binarize(next_sample)
                 samples[:, i, j, k] = next_sample[:, i, j, k]
 
-    save_images(samples, n_row, n_col, conf, suff)
+    save_images(samples, n_row, n_col, conf)
 
 
-def save_images(samples, n_row, n_col, conf, suff):
-    images = samples 
-    if conf.data == "mnist":
+def save_images(images, n_row, n_col, conf):
+    '''
+    Saves images as a single .png
+    :param images: numpy array with shape N,H,W or N,H,W,C
+    '''
+    # Put images in grid
+    if conf.channels == 1:
         images = images.reshape((n_row, n_col, conf.img_height, conf.img_width))
-        images = images.transpose(1, 2, 0, 3)
-        images = images.reshape((conf.img_height * n_row, conf.img_width * n_col))
-    else:
-        images = images.reshape((n_row, n_col, conf.img_height, conf.img_width, conf.channel))
-        images = images.transpose(1, 2, 0, 3, 4)
-        images = images.reshape((conf.img_height * n_row, conf.img_width * n_col, conf.channel))
+        images = images.transpose((0,2,1,3))
+        images = images.reshape(n_row*conf.img_height, n_col*conf.img_width)
 
-    filename = datetime.now().strftime('%Y_%m_%d_%H_%M')+suff+".jpg"
-    scipy.misc.toimage(images, cmin=0.0, cmax=1.0).save(os.path.join(conf.samples_path, filename))
+    images = (images/(conf.bins-1) * 255).astype('uint8') # change number of bins back to 256
+
+    filepath = os.path.join(conf.samples_path, datetime.now().strftime('%Y_%m_%d-%H_%M_%S')+".png")
+    if conf.debug: Image.fromarray(images).show()
+    Image.fromarray(images).save(filepath)
+    print("Saved "+ filepath)
+
+
+def save_batch_details(batch_X, conf):
+    '''
+    Save various details about this batch of images. Useful during debugging.
+    :param batch_X: numpy array with shape N,H,W or N,H,W,C
+    :param conf:
+    '''
+    flat = batch_X.flatten()
+    flat.sort()
+    print("Batch details: ", batch_X.dtype, batch_X.shape, np.min(batch_X), np.max(batch_X), flat)
+    save_images(batch_X, conf.batch_size, 1, conf)
+
+
+# def save_images(samples, n_row, n_col, conf, suff):
+#     images = samples
+#     images = images.reshape((n_row, n_col, conf.img_height, conf.img_width))
+#     print(images.shape)
+#     images = images.transpose(1, 2, 0, 3) # WRONG ORDER!!!
+#     print(images.shape)
+#     images = images.reshape((conf.img_height * n_row, conf.img_width * n_col))
+#     print(images.shape)
+#     # else:
+#     #     images = images.reshape((n_row, n_col, conf.img_height, conf.img_width, conf.channels))
+#     #     images = images.transpose(1, 2, 0, 3, 4)
+#     #     images = images.reshape((conf.img_height * n_row, conf.img_width * n_col, conf.channels))
+#     # images = np.random.uniform(0,size=(conf.img_height * n_row, conf.img_width * n_col)).astype(np.int32)
+#     filename = datetime.now().strftime('%Y_%m_%d-%H_%M_%S')+suff+".jpg"
+#     scipy.misc.toimage(images, cmin=0.0, cmax=1.0).save(os.path.join(conf.samples_path, filename))
+#     print("Saved {}".format(os.path.join(conf.samples_path, filename)))
 
 
 def get_batch(data, pointer, batch_size):
-    if (batch_size + 1) * pointer >= data.shape[0]:
+    all_X, all_y = data
+    if (batch_size + 1) * pointer >= all_X.shape[0]:
         pointer = 0
-    batch = data[batch_size * pointer : batch_size * (pointer + 1)]
+    batch_X = all_X[batch_size * pointer : batch_size * (pointer + 1)]
+    batch_y = all_y[batch_size * pointer : batch_size * (pointer + 1)]
     pointer += 1
-    return [batch, pointer]
+    return [batch_X, batch_y, pointer]
 
 
 def one_hot(batch_y, num_classes):
@@ -86,20 +122,20 @@ def makepaths(conf):
     conf.ckpt_file = os.path.join(ckpt_full_path, "model.ckpt")
 
     prefix = '%d_'%conf.id if conf.id > 0 else ''
-    conf.samples_path = os.path.join(conf.samples_path, prefix+"epoch=%d_bs=%d_layers=%d_fmap=%d"%(conf.epochs, conf.batch_size, conf.layers, conf.f_map))
+    conf.samples_path = os.path.join(conf.samples_path, prefix)
     conf.samples_path += '_%s'%conf.data
     conf.samples_path += '_conditional' if conf.conditional else ''
-    conf.samples_path += '_%s_loss'%conf.loss
-    conf.samples_path += '_%s'%conf.note
-
+    conf.samples_path += "bins=%d_bs=%d_fmap=%d_layers=%d_epoch=%d_loss=%s_%s" % \
+                         (conf.bins, conf.batch_size, conf.f_map, conf.layers, conf.epochs, conf.loss, conf.note)
+    conf.samples_path += '_debug' if conf.debug else ''
     if not os.path.exists(conf.samples_path):
         os.makedirs(conf.samples_path)
-
     if tf.gfile.Exists(conf.summary_path):
         tf.gfile.DeleteRecursively(conf.summary_path)
     tf.gfile.MakeDirs(conf.summary_path)
 
     return conf
+
 
 def make_deterministic(seed=1234):
     tf.set_random_seed(seed)
